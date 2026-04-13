@@ -7,13 +7,31 @@ from datetime import datetime
 
 model = YOLO("yolo11n.pt")
 
+
+def extrair_palavra(nome):
+    nome = nome.replace(".mp4", "")
+
+    # remove números do início
+    while len(nome) > 0 and nome[0].isdigit():
+        nome = nome[1:]
+
+    # corta "Sinalizador"
+    if "Sinalizador" in nome:
+        nome = nome.split("Sinalizador")[0]
+
+    return nome.lower()
+
+
 def processar_video(video_path, output_folder, label):
 
     cap = cv2.VideoCapture(video_path)
 
     fps = cap.get(cv2.CAP_PROP_FPS)
+    if fps == 0 or fps is None:
+        fps = 30  # fallback
+
     total_frames_video = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    frames_pular = int(fps * 1)  # 🔥 corta 1 segundo
+    frames_pular = int(fps * 1)  # 1 segundo
 
     frame_quant = 0
     processado_frames = 0
@@ -34,11 +52,11 @@ def processar_video(video_path, output_folder, label):
 
         frame_quant += 1
 
-        # 🔥 IGNORA INÍCIO
+        # corta início
         if frame_quant < frames_pular:
             continue
 
-        # 🔥 IGNORA FINAL
+        # corta final
         if frame_quant > (total_frames_video - frames_pular):
             break
 
@@ -86,7 +104,6 @@ def processar_video(video_path, output_folder, label):
                 prev_regiao = prev_frame[int(h*0.25):int(h*0.55), int(w*0.3):int(w*0.7)]
 
                 diff = cv2.absdiff(prev_regiao, regiao)
-
                 _, thresh = cv2.threshold(diff, 20, 255, cv2.THRESH_BINARY)
 
                 kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3,3))
@@ -94,38 +111,31 @@ def processar_video(video_path, output_folder, label):
 
                 num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(thresh)
 
-                areas_validas = []
+                areas_validas = [
+                    stats[i, cv2.CC_STAT_AREA]
+                    for i in range(1, num_labels)
+                    if stats[i, cv2.CC_STAT_AREA] > 300
+                ]
 
-                for i in range(1, num_labels):
-                    area = stats[i, cv2.CC_STAT_AREA]
-
-                    if area > 300:
-                        areas_validas.append(area)
-
-                if len(areas_validas) == 0:
+                if not areas_validas:
                     frames_com_movimento = max(0, frames_com_movimento - 1)
                     descartado_frames += 1
                     sem_movimento += 1
                     continue
 
                 maior_area = max(areas_validas)
+                area_total = thresh.shape[0] * thresh.shape[1]
 
-                h_m, w_m = thresh.shape
-                area_total = h_m * w_m
-
-                ratio = maior_area / area_total
-
-                if ratio < 0.004:
+                if (maior_area / area_total) < 0.004:
                     frames_com_movimento = max(0, frames_com_movimento - 1)
                     descartado_frames += 1
                     sem_movimento += 1
                     continue
 
-                parte_cima = thresh[0:int(h_m*0.6), :]
-                parte_baixo = thresh[int(h_m*0.6):h_m, :]
-
-                cima = cv2.countNonZero(parte_cima)
-                baixo = cv2.countNonZero(parte_baixo)
+                # remove braço baixo
+                h_m = thresh.shape[0]
+                cima = cv2.countNonZero(thresh[0:int(h_m*0.6), :])
+                baixo = cv2.countNonZero(thresh[int(h_m*0.6):, :])
 
                 if baixo > cima:
                     frames_com_movimento = max(0, frames_com_movimento - 1)
@@ -141,29 +151,34 @@ def processar_video(video_path, output_folder, label):
             if frame_quant % 5 == 0:
                 prev_frame = gray
 
+            # pad quadrado
             h, w, _ = frame.shape
             size = max(h, w)
 
-            top = (size - h) // 2
-            bottom = size - h - top
-            left = (size - w) // 2
-            right = size - w - left
-
             frame = cv2.copyMakeBorder(
-                frame, top, bottom, left, right,
-                cv2.BORDER_CONSTANT, value=[0,0,0]
+                frame,
+                (size - h) // 2,
+                size - h - (size - h) // 2,
+                (size - w) // 2,
+                size - w - (size - w) // 2,
+                cv2.BORDER_CONSTANT,
+                value=[0, 0, 0]
             )
 
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             frame = cv2.resize(frame, (224, 224))
 
-            # 🔥 remove duplicados
+            # remove duplicados
             if last_saved_frame is not None:
-                diff_final = cv2.absdiff(last_saved_frame, frame)
-                if diff_final.mean() < 1.5:
+                if cv2.absdiff(last_saved_frame, frame).mean() < 1.5:
                     continue
 
-            output_path = os.path.join(output_folder, label, f"{label}_{processado_frames}.jpg")
+            output_path = os.path.join(
+                output_folder,
+                label,
+                f"frame_{processado_frames}.jpg"
+            )
+
             cv2.imwrite(output_path, frame)
 
             last_saved_frame = frame.copy()
@@ -193,27 +208,34 @@ def processar_dataset():
 
     resultados = []
 
-    total_frames = 0
-    total_processado = 0
-    total_descartado = 0
-    total_yolo_falhas = 0
-    total_sem_movimento = 0
+    total_frames = total_processado = total_descartado = 0
+    total_yolo_falhas = total_sem_movimento = 0
 
     inicio_total = datetime.now()
 
     print(f"Total de vídeos: {len(video_files)}\n")
 
+    contador_palavras = {}
+
     for file in tqdm(video_files, desc="Processando vídeos"):
 
         video_path = os.path.join(input_folder, file)
-        label = file.split("_")[0]
+
+        palavra = extrair_palavra(file)
+
+        if palavra not in contador_palavras:
+            contador_palavras[palavra] = 0
+
+        contador_palavras[palavra] += 1
+
+        # 🔥 cada vídeo vira uma pasta única
+        label = f"{palavra}_{contador_palavras[palavra]}"
 
         inicio_video = datetime.now()
 
         estatistica = processar_video(video_path, output_folder, label)
 
-        fim_video = datetime.now()
-        tempo_video = (fim_video - inicio_video).total_seconds()
+        tempo_video = (datetime.now() - inicio_video).total_seconds()
 
         resultados.append({
             "video": file,
@@ -232,52 +254,17 @@ def processar_dataset():
         total_yolo_falhas += estatistica["yolo_falhas"]
         total_sem_movimento += estatistica["sem_movimento"]
 
-    fim_total = datetime.now()
-    tempo_total = (fim_total - inicio_total).total_seconds()
-
-    minutos = int(tempo_total // 60)
-    segundos = int(tempo_total % 60)
+    tempo_total = (datetime.now() - inicio_total).total_seconds()
 
     print("\n===== ESTATÍSTICAS GERAIS =====")
-    print(f"Total de frames: {total_frames}")
-    print(f"Processados: {total_processado}")
-    print(f"Descartados: {total_descartado}")
-    print(f"Falhas YOLO: {total_yolo_falhas}")
-    print(f"Sem movimento: {total_sem_movimento}")
-    print(f"Tempo total: {minutos} min {segundos} s")
-
-    if total_frames > 0:
-        aproveitamento = (total_processado / total_frames) * 100
-        print(f"Aproveitamento: {aproveitamento:.2f}%")
-
-    resultados.append({
-        "video": "TOTAL",
-        "classe": "-",
-        "total_frames": total_frames,
-        "processados": total_processado,
-        "descartados": total_descartado,
-        "falhas_yolo": total_yolo_falhas,
-        "sem_movimento": total_sem_movimento,
-        "tempo_processamento_s": tempo_total
-    })
+    print(f"Tempo total: {tempo_total:.2f}s")
 
     os.makedirs("reports", exist_ok=True)
 
-    data_hora_atual = datetime.now()
-    csv_path = f'reports/estatisticas_processamento_{data_hora_atual.strftime("%d_%m_%H_%M")}.csv'
+    csv_path = f'reports/estatisticas_{datetime.now().strftime("%d_%m_%H_%M")}.csv'
 
-    with open(csv_path, mode="w", newline="", encoding="utf-8") as file:
-        writer = csv.DictWriter(file, fieldnames=[
-            "video",
-            "classe",
-            "total_frames",
-            "processados",
-            "descartados",
-            "falhas_yolo",
-            "sem_movimento",
-            "tempo_processamento_s"
-        ])
-
+    with open(csv_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=resultados[0].keys())
         writer.writeheader()
         writer.writerows(resultados)
 
