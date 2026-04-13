@@ -1,23 +1,19 @@
-import kagglehub
-import shutil
-import os
+import src.ajuste_dataset as ad
+import src.download_dataset as dd
 
-def download_minds_libras():
+import src.ajuste_dataset_destaquemaos as teste_destaque
 
-    print("Baixando dataset do Kaggle...")
-    path = kagglehub.dataset_download("j0aopsantos/minds-libras")
-    print("Dataset baixado em:", path)
 
-    destination = os.path.join("data", "origin")
-    os.makedirs(destination, exist_ok=True)
+def main():
 
-    for file in os.listdir(path):
-        src_file = os.path.join(path, file)
-        dst_file = os.path.join(destination, file)
+    print("1. Baixando dataset...")
+    dd.download_minds_libras()
 
-        if os.path.isfile(src_file):
-            shutil.copy2(src_file, dst_file)
-    print("Dataset copiado para data/origin com sucesso!")
+    print("\n2. Processando vídeos...")
+    ad.processar_dataset()
+    #teste_destaque.processar_dataset()
+
+    print("Pipeline concluído!")
 
 if __name__ == "__main__":
-    download_minds_libras()
+    main()
