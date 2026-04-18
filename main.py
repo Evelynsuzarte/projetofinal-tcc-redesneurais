@@ -4,6 +4,8 @@ import src.download_dataset as dd
 from src.rede_neural.treino import treinar
 import src.ajuste_dataset_destaquemaos as teste_destaque
 from src.rede_neural.predicao import executar_previsao
+from src.rede_neural.predicao import executar_previsao
+from src.rede_neural.dataset import LibrasDatasetSequencia
 
 
 
@@ -26,10 +28,14 @@ def main():
         ad.processar_dataset()
 
     # passo 3 - treinar rede neural
-    #treinar() 
+    treinar() 
 
     # passo 4 - execução do treino
-    #executar_previsao()
+    dataset = LibrasDatasetSequencia("data/pre_processado/yolo11_resultado_testes")
+    executar_previsao(
+        "data/pre_processado/yolo11_resultado_testes",
+        dataset.classes
+    )
 
     print("Pipeline concluído!")
 
