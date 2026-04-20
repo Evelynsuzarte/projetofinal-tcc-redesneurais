@@ -15,17 +15,19 @@ def main():
     print("1. Baixando dataset...")
     dd.download_minds_libras()
 
+    print("\n2. Processando vídeos...")
+    #ad.processar_dataset()
 
-    # passo 2 - fazer o pré-processamento das imagens com o yolo
-    caminho = "data/pre_processado/yolo11_resultado_testes"
-    if os.path.exists(caminho) and os.path.isdir(caminho) and os.listdir(caminho):
-        print("O dataset já foi pré processado!")
-    elif os.path.exists(caminho) and os.path.isdir(caminho):
-        print("\n2. Processando vídeos...")
-        ad.processar_dataset()
-    else:
-        print("\n2. Processando vídeos...")
-        ad.processar_dataset()
+    # # passo 2 - fazer o pré-processamento das imagens com o yolo
+    # caminho = "data/pre_processado/yolo11_resultado_testes"
+    # if os.path.exists(caminho) and os.path.isdir(caminho) and os.listdir(caminho):
+    #     print("O dataset já foi pré processado!")
+    # elif os.path.exists(caminho) and os.path.isdir(caminho):
+    #     print("\n2. Processando vídeos...")
+    #     ad.processar_dataset()
+    # else:
+    #     print("\n2. Processando vídeos...")
+    #     ad.processar_dataset()
 
     # passo 3 - treinar rede neural
     treinar() 
