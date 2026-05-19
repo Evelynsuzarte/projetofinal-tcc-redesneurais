@@ -1,1 +1,9 @@
 kagglehub
+opencv-python
+numpy
+ultralytics
+tqdm
+matplotlib
+pandas
+tensorflow
+scikit-learn
