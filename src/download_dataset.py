@@ -4,7 +4,7 @@ import os
 
 def download_minds_libras():
 
-    caminho = "data\origin"
+    caminho = os.path.join("data", "origin")
     if os.path.exists(caminho) and os.path.isdir(caminho):
         print("O dataset já foi baixado!")
     else:
@@ -22,8 +22,5 @@ def download_minds_libras():
             if os.path.isfile(src_file):
                 shutil.copy2(src_file, dst_file)
         print("Dataset copiado para data/origin com sucesso!")
-
-if __name__ == "__main__":
-    download_minds_libras()
 
 
